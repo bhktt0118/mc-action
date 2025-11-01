@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  mc-server:
+    image: itzg/minecraft-server:latest # 使用官方的 Docker 镜像
+    container_name: mc-server
+    tty: true
+    stdin_open: true
+    environment:
+      EULA: "TRUE"        # 同意 Minecraft 的 EULA
+      TYPE: "VANILLA"     # 服务器类型，这里用原版。你也可以换成 PAPER 等
+      VERSION: "1.21.1"   # 你想要的 Minecraft 版本
+    ports:
+      - "25565:25565"     # 将容器端口映射到 Runner 主机
+    volumes:
+      # 将容器内的世界数据挂载到主机的一个目录，便于备份
+      - ./mc-data:/data
+    restart: unless-stopped
+
+  # 内网穿透客户端（例如使用 frp）
+  frp-client:
+    image: snowdreamtech/frpc:latest
+    container_name: frp-client
+    depends_on:
+      - mc-server
+    volumes:
+      # 挂载 frp 的配置文件
+      - ./scripts/frpc.ini:/etc/frp/frpc.ini
+    restart: unless-stopped
