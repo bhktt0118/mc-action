@@ -1,36 +1,50 @@
 #!/usr/bin/env python3
 import time
 import os
-import requests
-import threading
-
-# 计算时间点（5小时 = 18000秒）
-MAX_RUNTIME = 18000
-SHUTDOWN_MARGIN = 1800  # 希望留出30分钟（1800秒）用于数据保存和上传
-SHUTDOWN_AT = MAX_RUNTIME - SHUTDOWN_MARGIN
+import subprocess
 
 def send_server_command(command):
-    """通过 RCON 或直接向服务器标准输入发送命令（此处为简化示例）"""
-    # 实际实现可能需要使用 RCON 协议或直接写入容器的标准输入
-    print(f"[INFO] 执行命令: {command}")
+    """向Minecraft服务器发送命令"""
+    try:
+        # 使用rcon-cli发送命令
+        result = subprocess.run([
+            "docker", "exec", "mc-server",
+            "rcon-cli", command
+        ], capture_output=True, text=True, timeout=10)
+        print(f"命令 '{command}' 执行结果: {result.returncode}")
+        return True
+    except Exception as e:
+        print(f"发送命令失败: {e}")
+        return False
 
 def graceful_shutdown():
     """安全关闭服务器"""
-    print("[INFO] 准备关闭服务器...")
-    send_server_command("say 服务器将在5分钟后自动保存并关闭，感谢大家的游玩！")
-    time.sleep(60)
-    send_server_command("say 服务器将在1分钟后关闭，请做好准备。")
+    print("开始安全关闭流程...")
+    
+    # 发送警告消息
+    send_server_command("say 服务器将在3分钟后自动保存并关闭！")
+    time.sleep(120)
+    
+    send_server_command("say 服务器将在1分钟后关闭，请做好准备！")
     time.sleep(30)
-    send_server_command("say 最后30秒！正在保存世界...")
-    send_server_command("save-all")  # 强制保存所有数据
+    
+    send_server_command("say 正在保存世界数据...")
+    send_server_command("save-all")
     time.sleep(25)
+    
     send_server_command("say 服务器关闭中...")
-    send_server_command("stop")      # 停止服务器
-    print("[INFO] 服务器关闭指令已发送。")
+    send_server_command("stop")
+    print("关闭命令已发送")
 
 def main():
-    print(f"[INFO] 守护脚本已启动。将在 {SHUTDOWN_AT/3600} 小时后触发关闭流程。")
-    time.sleep(SHUTDOWN_AT)
+    """主函数 - 5小时后触发关闭"""
+    # 5小时 = 18000秒
+    wait_time = 18000
+    
+    print(f"自动关闭守护进程已启动，将在{wait_time/3600}小时后执行关闭")
+    print(f"等待时间: {wait_time}秒")
+    
+    time.sleep(wait_time)
     graceful_shutdown()
 
 if __name__ == "__main__":
