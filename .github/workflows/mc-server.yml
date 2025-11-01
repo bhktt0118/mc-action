@@ -1,0 +1,64 @@
+name: 🎮 Minecraft Server CI
+
+on:
+  workflow_dispatch: # 允许手动触发
+  push:
+    branches: [ main ]
+    paths-ignore: # 忽略配置文件的更改，避免无谓触发
+      - 'README.md'
+
+jobs:
+  deploy-mc-server:
+    runs-on: ubuntu-latest
+    env:
+      WORLD_DATA_ARTIFACT_NAME: mc-world-data
+
+    steps:
+    - name: 🗂️ 检出仓库代码
+      uses: actions/checkout@v4
+
+    - name: 💾 下载之前保存的世界数据
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ env.WORLD_DATA_ARTIFACT_NAME }}
+        path: ./mc-data/
+      continue-on-error: true # 如果是第一次运行，没有数据是正常的
+
+    - name: 🐳 启动 Minecraft 服务器栈
+      run: |
+        docker-compose up -d
+        # 等待服务器初步启动
+        sleep 30
+
+    - name: ⏰ 启动自动关闭守护脚本
+      run: |
+        python3 scripts/auto-shutdown.py &
+
+    - name: 🕹️ 等待服务器工作流结束（手动停止）
+      run: |
+        echo "🚀 Minecraft 服务器已启动！工作流将最多运行6小时。"
+        echo "💡 当你想手动停止服务器时，请在此仓库的 Actions 页面点击 'Cancel workflow'。"
+        echo "⏳ 守护脚本将在5小时后自动保存并关闭服务器。"
+        # 用一个长睡眠来保持 job 活跃，直到被手动取消或超时
+        sleep 21600 # 6小时 = 21600秒
+
+    - name: 🛑 停止 Docker 容器
+      if: always()
+      run: |
+        docker-compose down
+
+    - name: 💽 保存世界数据到 Artifacts
+      if: always()
+      run: |
+        echo "正在打包世界数据..."
+        # 将世界数据打包，便于上传
+        tar -czf world-data-backup.tar.gz -C ./mc-data/ .
+      continue-on-error: true
+
+    - name: 📤 上传世界数据工件
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.WORLD_DATA_ARTIFACT_NAME }}
+        path: world-data-backup.tar.gz
+        retention-days: 90
+      if: always()
